@@ -3,12 +3,12 @@ using Microsoft.Extensions.Logging;
 
 namespace TaskFlow.Users.Application.Notifications.Handlers;
 
-public sealed class LogUserRegistrationHandler
+public sealed class SendWelcomeEmailHandler
     : INotificationHandler<UserRegisteredNotification>
 {
-    private readonly ILogger<LogUserRegistrationHandler> _logger;
+    private readonly ILogger<SendWelcomeEmailHandler> _logger;
 
-    public LogUserRegistrationHandler(ILogger<LogUserRegistrationHandler> logger)
+    public SendWelcomeEmailHandler(ILogger<SendWelcomeEmailHandler> logger)
     {
         _logger = logger;
     }
@@ -17,11 +17,11 @@ public sealed class LogUserRegistrationHandler
         UserRegisteredNotification notification,
         CancellationToken cancellationToken)
     {
+        // TODO: Injecter un IEmailService et envoyer vraiment
         _logger.LogInformation(
-            "✅ New user registered: {UserId} - {FullName} ({Email})",
-            notification.UserId,
-            notification.FullName,
-            notification.Email);
+            "📧 Welcome email sent to {Email} for user {UserId}",
+            notification.Email,
+            notification.UserId);
 
         return Task.CompletedTask;
     }

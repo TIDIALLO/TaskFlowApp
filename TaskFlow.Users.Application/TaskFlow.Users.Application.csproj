@@ -7,6 +7,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Notifications\Handlers\SendWelcomeEmailHandler.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Notifications\Handlers\SendWelcomeEmailHandler.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="MediatR" Version="12.5.0" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.15.0" />
   </ItemGroup>
