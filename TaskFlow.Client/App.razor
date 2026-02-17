@@ -1,0 +1,32 @@
+﻿@*
+    CascadingAuthenticationState fournit l'état d'auth à TOUTE l'app.
+    Chaque composant enfant peut accéder à l'état via [CascadingParameter].
+    
+    AuthorizeRouteView :
+    - Si la page a [Authorize] et l'utilisateur est connecté → affiche la page
+    - Si la page a [Authorize] et l'utilisateur est anonyme → affiche NotAuthorized
+    - Si la page n'a pas [Authorize] → affiche la page normalement
+*@
+
+<CascadingAuthenticationState>
+    <Router AppAssembly="@typeof(App).Assembly">
+        <Found Context="routeData">
+            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(Layout.MainLayout)">
+                <NotAuthorized>
+                    @* Redirige automatiquement vers /login si non autorisé *@
+                    <RedirectToLogin />
+                </NotAuthorized>
+            </AuthorizeRouteView>
+            <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+        </Found>
+        <NotFound>
+            <PageTitle>Not found</PageTitle>
+            <LayoutView Layout="@typeof(Layout.MainLayout)">
+                <div class="text-center mt-5">
+                    <h1 class="display-4">404</h1>
+                    <p>Page introuvable.</p>
+                </div>
+            </LayoutView>
+        </NotFound>
+    </Router>
+</CascadingAuthenticationState>

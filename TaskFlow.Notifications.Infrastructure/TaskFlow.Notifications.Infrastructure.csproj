@@ -1,0 +1,19 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TaskFlow.Notifications.Application\TaskFlow.Notifications.Application.csproj" />
+    <ProjectReference Include="..\TaskFlow.Notifications.Domain\TaskFlow.Notifications.Domain.csproj" />
+    <ProjectReference Include="..\TaskFlow.Shared.Kernel\TaskFlow.Shared.Kernel.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.11" />
+  </ItemGroup>
+
+</Project>

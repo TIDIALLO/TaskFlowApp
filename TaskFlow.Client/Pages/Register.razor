@@ -1,0 +1,124 @@
+@page "/register"
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+@inject LanguageService Lang
+@implements IDisposable
+
+<PageTitle>@Lang.Get("register.title") — TaskFlow</PageTitle>
+
+<div class="row justify-content-center" style="min-height: calc(100vh - 180px); align-items: center;">
+    <div class="col-md-6 col-lg-5">
+        <div class="auth-card card">
+            <div class="auth-header">
+                <i class="bi bi-person-plus d-block mb-2" style="font-size: 2rem;"></i>
+                <h3>@Lang.Get("register.title")</h3>
+                <p>@Lang.Get("register.subtitle")</p>
+            </div>
+            <div class="auth-body">
+                @if (!string.IsNullOrEmpty(_errorMessage))
+                {
+                    <div class="alert alert-danger py-2" style="font-size: 0.875rem;">
+                        <i class="bi bi-exclamation-circle me-1"></i>@_errorMessage
+                    </div>
+                }
+                @if (_success)
+                {
+                    <div class="alert alert-success py-2" style="font-size: 0.875rem;">
+                        <i class="bi bi-check-circle me-1"></i>
+                        @Lang.Get("register.success") <a href="/login" class="fw-bold alert-link">@Lang.Get("register.signin_now")</a>
+                    </div>
+                }
+
+                <EditForm Model="_model" OnValidSubmit="HandleRegister" FormName="register">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary class="text-danger small" />
+
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <label class="form-label">@Lang.Get("register.firstname")</label>
+                            <InputText @bind-Value="_model.FirstName" class="form-control" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">@Lang.Get("register.lastname")</label>
+                            <InputText @bind-Value="_model.LastName" class="form-control" />
+                        </div>
+                    </div>
+
+                    <div class="mb-3 mt-3">
+                        <label class="form-label">@Lang.Get("register.email")</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light"><i class="bi bi-envelope text-muted"></i></span>
+                            <InputText @bind-Value="_model.Email" class="form-control" placeholder="you@example.com" />
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label">@Lang.Get("register.password")</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light"><i class="bi bi-lock text-muted"></i></span>
+                            <InputText @bind-Value="_model.Password" type="password" class="form-control" placeholder="••••••••" />
+                        </div>
+                        <small class="text-muted d-block mt-1">
+                            <i class="bi bi-info-circle me-1"></i>@Lang.Get("register.password_hint")
+                        </small>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100" disabled="@_isLoading">
+                        @if (_isLoading) { <span class="spinner-border spinner-border-sm me-2"></span> }
+                        <i class="bi bi-person-plus me-1"></i> @Lang.Get("register.submit")
+                    </button>
+                </EditForm>
+            </div>
+            <div class="auth-footer">
+                @Lang.Get("register.has_account") <a href="/login" class="fw-semibold">@Lang.Get("register.signin")</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private RegisterFormModel _model = new();
+    private string? _errorMessage;
+    private bool _isLoading;
+    private bool _success;
+
+    protected override void OnInitialized() => Lang.OnLanguageChanged += Refresh;
+    private void Refresh() => InvokeAsync(StateHasChanged);
+    public void Dispose() => Lang.OnLanguageChanged -= Refresh;
+
+    private async Task HandleRegister()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+        _success = false;
+
+        var request = new RegisterRequest(
+            _model.Email!, _model.Password!, _model.FirstName!, _model.LastName!);
+
+        var result = await AuthService.RegisterAsync(request);
+
+        if (result.IsSuccess)
+            _success = true;
+        else
+            _errorMessage = result.ErrorMessage;
+
+        _isLoading = false;
+    }
+
+    private class RegisterFormModel
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "First name is required.")]
+        public string? FirstName { get; set; }
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Last name is required.")]
+        public string? LastName { get; set; }
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Email is required.")]
+        [System.ComponentModel.DataAnnotations.EmailAddress(ErrorMessage = "Invalid email.")]
+        public string? Email { get; set; }
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Password is required.")]
+        [System.ComponentModel.DataAnnotations.MinLength(8, ErrorMessage = "Min 8 characters.")]
+        public string? Password { get; set; }
+    }
+}

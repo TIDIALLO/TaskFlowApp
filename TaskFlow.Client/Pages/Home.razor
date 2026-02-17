@@ -1,0 +1,91 @@
+﻿@page "/"
+@inject LanguageService Lang
+@implements IDisposable
+
+<PageTitle>TaskFlow</PageTitle>
+
+<section class="hero-section text-center">
+    <div class="container">
+        <span class="badge rounded-pill text-bg-light border px-3 py-2 mb-3" style="font-size: 0.8rem;">
+            <i class="bi bi-lightning-charge-fill text-warning me-1"></i>
+            @Lang.Get("home.badge")
+        </span>
+
+        <h1 class="mb-3">
+            @Lang.Get("home.title1")<br />
+            <span class="gradient-text">@Lang.Get("home.title2")</span>
+        </h1>
+
+        <p class="lead mx-auto" style="max-width: 540px;">
+            @Lang.Get("home.desc")
+        </p>
+
+        <AuthorizeView>
+            <Authorized>
+                <div class="d-flex gap-3 justify-content-center mt-4">
+                    <a href="/tasks" class="btn btn-primary btn-lg">
+                        <i class="bi bi-kanban me-2"></i>@Lang.Get("home.goto_tasks")
+                    </a>
+                    <a href="/notifications" class="btn btn-outline-secondary btn-lg">
+                        <i class="bi bi-bell me-2"></i>@Lang.Get("home.notifications")
+                    </a>
+                </div>
+            </Authorized>
+            <NotAuthorized>
+                <div class="d-flex gap-3 justify-content-center mt-4">
+                    <a href="/register" class="btn btn-primary btn-lg">
+                        <i class="bi bi-person-plus me-2"></i>@Lang.Get("home.getstarted")
+                    </a>
+                    <a href="/login" class="btn btn-outline-secondary btn-lg">
+                        <i class="bi bi-box-arrow-in-right me-2"></i>@Lang.Get("home.signin")
+                    </a>
+                </div>
+            </NotAuthorized>
+        </AuthorizeView>
+    </div>
+</section>
+
+<section class="py-5">
+    <div class="container">
+        <div class="text-center mb-4">
+            <h4 class="fw-bold">@Lang.Get("home.why")</h4>
+            <p class="text-muted">@Lang.Get("home.why_desc")</p>
+        </div>
+        <div class="row g-4">
+            <div class="col-md-6 col-lg-3">
+                <div class="feature-card">
+                    <div class="feature-icon bg-indigo"><i class="bi bi-layers"></i></div>
+                    <h5>@Lang.Get("home.feat1_title")</h5>
+                    <p>@Lang.Get("home.feat1_desc")</p>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-3">
+                <div class="feature-card">
+                    <div class="feature-icon bg-cyan"><i class="bi bi-arrows-expand"></i></div>
+                    <h5>@Lang.Get("home.feat2_title")</h5>
+                    <p>@Lang.Get("home.feat2_desc")</p>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-3">
+                <div class="feature-card">
+                    <div class="feature-icon bg-green"><i class="bi bi-broadcast"></i></div>
+                    <h5>@Lang.Get("home.feat3_title")</h5>
+                    <p>@Lang.Get("home.feat3_desc")</p>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-3">
+                <div class="feature-card">
+                    <div class="feature-icon bg-amber"><i class="bi bi-shield-lock"></i></div>
+                    <h5>@Lang.Get("home.feat4_title")</h5>
+                    <p>@Lang.Get("home.feat4_desc")</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+@code {
+    protected override void OnInitialized() => Lang.OnLanguageChanged += Refresh;
+    private void Refresh() => InvokeAsync(StateHasChanged);
+    public void Dispose() => Lang.OnLanguageChanged -= Refresh;
+}

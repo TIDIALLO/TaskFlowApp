@@ -1,0 +1,13 @@
+@inject NavigationManager Navigation
+
+@* 
+    Composant utilitaire : redirige vers /login quand l'utilisateur 
+    n'est pas autorisé à accéder à une page [Authorize].
+*@
+
+@code {
+    protected override void OnInitialized()
+    {
+        Navigation.NavigateTo("/login");
+    }
+}

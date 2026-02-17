@@ -1,0 +1,404 @@
+@page "/tasks"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject TaskService TaskService
+@inject NavigationManager Navigation
+@inject LanguageService Lang
+@implements IDisposable
+
+<PageTitle>@Lang.Get("tasks.title") — TaskFlow</PageTitle>
+
+@* ══════════ TOAST ══════════ *@
+@if (_toast is not null)
+{
+    <div class="toast-notification toast-@_toast.Type">
+        <i class="bi @GetToastIcon(_toast.Type)"></i>
+        @_toast.Message
+        <button type="button" class="btn-close btn-close-white ms-auto" @onclick="DismissToast" style="font-size:0.65rem;"></button>
+    </div>
+}
+
+@* ══════════ HEADER ══════════ *@
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="fw-bold mb-0">
+        <i class="bi bi-check2-square text-primary me-2"></i>@Lang.Get("tasks.title")
+        @if (!_isLoading)
+        {
+            <span class="badge rounded-pill bg-light text-dark border ms-2" style="font-size: 0.75rem;">@_tasks.Count</span>
+        }
+    </h3>
+    <button class="btn btn-primary" @onclick="ShowCreateForm" disabled="@(_showCreateForm || _editingTaskId.HasValue)">
+        <i class="bi bi-plus-lg me-1"></i> @Lang.Get("tasks.new")
+    </button>
+</div>
+
+@* ══════════ CREATE FORM ══════════ *@
+@if (_showCreateForm)
+{
+    <div class="card mb-4 border-primary">
+        <div class="card-header bg-primary text-white fw-semibold">
+            <i class="bi bi-plus-circle me-1"></i> @Lang.Get("tasks.create_title")
+        </div>
+        <div class="card-body">
+            @if (!string.IsNullOrEmpty(_formError))
+            {
+                <div class="alert alert-danger py-2 small">
+                    <i class="bi bi-exclamation-circle me-1"></i>@_formError
+                </div>
+            }
+
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">@Lang.Get("tasks.field_title") <span class="text-danger">*</span></label>
+                    <input @bind="_newTask.Title" class="form-control" placeholder="@Lang.Get("tasks.placeholder_title")" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">@Lang.Get("tasks.field_priority")</label>
+                    <select @bind="_newTask.Priority" class="form-select">
+                        <option value="Low">@Lang.Get("priority.low")</option>
+                        <option value="Medium">@Lang.Get("priority.medium")</option>
+                        <option value="High">@Lang.Get("priority.high")</option>
+                        <option value="Critical">@Lang.Get("priority.critical")</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">@Lang.Get("tasks.field_duedate")</label>
+                    <input type="date" @bind="_newTask.DueDate" class="form-control" />
+                </div>
+                <div class="col-12">
+                    <label class="form-label">@Lang.Get("tasks.field_desc")</label>
+                    <textarea @bind="_newTask.Description" class="form-control" rows="2" placeholder="@Lang.Get("tasks.placeholder_desc")"></textarea>
+                </div>
+                <div class="col-12">
+                    <button class="btn btn-primary me-2" @onclick="CreateTask" disabled="@_isSubmitting">
+                        @if (_isSubmitting) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        @Lang.Get("tasks.btn_create")
+                    </button>
+                    <button class="btn btn-outline-secondary" @onclick="CancelCreate">@Lang.Get("tasks.btn_cancel")</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* ══════════ FILTERS ══════════ *@
+<div class="filter-tabs mb-4">
+    @foreach (var filter in _filters)
+    {
+        var count = filter == "All" ? _tasks.Count : _tasks.Count(t => t.Status == filter);
+        <button class="filter-tab @(filter == _currentFilter ? "active" : "")"
+                @onclick="() => _currentFilter = filter">
+            @GetFilterLabel(filter) <small class="opacity-50">@count</small>
+        </button>
+    }
+</div>
+
+@* ══════════ TASK LIST ══════════ *@
+@if (_isLoading)
+{
+    <div class="text-center py-5">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="text-muted mt-2">@Lang.Get("tasks.loading")</p>
+    </div>
+}
+else if (!FilteredTasks.Any())
+{
+    <div class="empty-state">
+        <i class="bi bi-inbox"></i>
+        <h5 class="text-dark">@Lang.Get("tasks.empty")</h5>
+        <p>@(_currentFilter == "All" ? Lang.Get("tasks.empty_hint") : "")</p>
+    </div>
+}
+else
+{
+    <div class="row g-3">
+        @foreach (var task in FilteredTasks)
+        {
+            <div class="col-md-6 col-lg-4">
+                @if (_editingTaskId == task.Id)
+                {
+                    @* ═══ EDIT MODE ═══ *@
+                    <div class="card h-100 border-primary task-card">
+                        <div class="card-header bg-primary text-white fw-semibold py-2" style="font-size:0.85rem;">
+                            <i class="bi bi-pencil-square me-1"></i> @Lang.Get("tasks.edit_title")
+                        </div>
+                        <div class="card-body">
+                            @if (!string.IsNullOrEmpty(_editError))
+                            {
+                                <div class="alert alert-danger py-1 small">@_editError</div>
+                            }
+                            <div class="mb-2">
+                                <label class="form-label small">@Lang.Get("tasks.field_title") *</label>
+                                <input @bind="_editTask.Title" class="form-control form-control-sm" />
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label small">@Lang.Get("tasks.field_desc")</label>
+                                <textarea @bind="_editTask.Description" class="form-control form-control-sm" rows="2"></textarea>
+                            </div>
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <label class="form-label small">@Lang.Get("tasks.field_priority")</label>
+                                    <select @bind="_editTask.Priority" class="form-select form-select-sm">
+                                        <option value="Low">@Lang.Get("priority.low")</option>
+                                        <option value="Medium">@Lang.Get("priority.medium")</option>
+                                        <option value="High">@Lang.Get("priority.high")</option>
+                                        <option value="Critical">@Lang.Get("priority.critical")</option>
+                                    </select>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small">@Lang.Get("tasks.field_duedate")</label>
+                                    <input type="date" @bind="_editTask.DueDate" class="form-control form-control-sm" />
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-footer d-flex gap-2">
+                            <button class="btn btn-primary btn-sm" @onclick="SaveEdit" disabled="@_isSubmitting">
+                                @if (_isSubmitting) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                                @Lang.Get("tasks.btn_save")
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm" @onclick="CancelEdit">@Lang.Get("tasks.btn_cancel")</button>
+                        </div>
+                    </div>
+                }
+                else if (_confirmDeleteId == task.Id)
+                {
+                    @* ═══ DELETE CONFIRM ═══ *@
+                    <div class="card h-100 border-danger task-card">
+                        <div class="card-body text-center py-4">
+                            <i class="bi bi-trash3 text-danger d-block mb-2" style="font-size: 2rem;"></i>
+                            <p class="fw-bold mb-1">@Lang.Get("tasks.delete_confirm")</p>
+                            <p class="text-muted small mb-3">"@task.Title"</p>
+                            <button class="btn btn-danger btn-sm me-2" @onclick="() => ConfirmDelete(task.Id)">
+                                <i class="bi bi-trash3 me-1"></i>@Lang.Get("tasks.delete_yes")
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm" @onclick="CancelDelete">@Lang.Get("tasks.delete_no")</button>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    @* ═══ NORMAL CARD ═══ *@
+                    <div class="card h-100 task-card border-left-@task.Priority.ToLower()">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h6 class="card-title mb-0 @(task.Status == "Done" ? "text-decoration-line-through text-muted" : "")"
+                                    style="font-size: 0.95rem;">
+                                    @task.Title
+                                </h6>
+                                <span class="badge rounded-pill badge-status-@task.Status.ToLower()" style="font-size: 0.7rem;">
+                                    @GetStatusLabel(task.Status)
+                                </span>
+                            </div>
+
+                            @if (!string.IsNullOrEmpty(task.Description))
+                            {
+                                <p class="card-text small text-muted mb-2" style="line-height: 1.5;">
+                                    @(task.Description.Length > 100 ? task.Description[..100] + "..." : task.Description)
+                                </p>
+                            }
+
+                            <div class="d-flex justify-content-between align-items-center mt-auto">
+                                <span class="badge rounded-pill badge-priority-@task.Priority.ToLower()" style="font-size: 0.7rem;">
+                                    @GetPriorityLabel(task.Priority)
+                                </span>
+                                @if (task.DueDate.HasValue)
+                                {
+                                    var isOverdue = task.DueDate.Value < DateTime.Now && task.Status is "Todo" or "InProgress";
+                                    <small class="@(isOverdue ? "text-overdue" : "text-muted")">
+                                        <i class="bi @(isOverdue ? "bi-exclamation-triangle-fill" : "bi-calendar3") me-1"></i>
+                                        @task.DueDate.Value.ToString("MMM dd")
+                                    </small>
+                                }
+                            </div>
+
+                            @if (task.CompletedAt.HasValue)
+                            {
+                                <small class="text-success d-block mt-2">
+                                    <i class="bi bi-check-circle-fill me-1"></i>
+                                    @Lang.Get("tasks.completed_at") @task.CompletedAt.Value.ToString("MMM dd, HH:mm")
+                                </small>
+                            }
+                        </div>
+                        <div class="card-footer bg-transparent d-flex gap-1 flex-wrap py-2">
+                            @if (task.Status == "Todo")
+                            {
+                                <button class="btn btn-sm btn-outline-primary" @onclick="@(() => ChangeStatus(task.Id, "InProgress"))">
+                                    <i class="bi bi-play-fill"></i> @Lang.Get("tasks.btn_start")
+                                </button>
+                            }
+                            @if (task.Status is "Todo" or "InProgress")
+                            {
+                                <button class="btn btn-sm btn-outline-success" @onclick="@(() => ChangeStatus(task.Id, "Done"))">
+                                    <i class="bi bi-check-lg"></i> @Lang.Get("tasks.btn_complete")
+                                </button>
+                                <button class="btn btn-sm btn-outline-warning" @onclick="@(() => ChangeStatus(task.Id, "Cancelled"))">
+                                    <i class="bi bi-x-lg"></i>
+                                </button>
+                            }
+                            @if (task.Status is "Todo" or "InProgress")
+                            {
+                                <button class="btn btn-sm btn-outline-secondary ms-auto" @onclick="() => StartEdit(task)"
+                                        title="@Lang.Get("tasks.btn_edit")">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                            }
+                            <button class="btn btn-sm btn-outline-danger @(task.Status is not ("Todo" or "InProgress") ? "ms-auto" : "")"
+                                    @onclick="() => RequestDelete(task.Id)" title="@Lang.Get("tasks.btn_delete")">
+                                <i class="bi bi-trash3"></i>
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    // ═══════ STATE ═══════
+    private List<TaskItemResponse> _tasks = [];
+    private bool _isLoading = true;
+    private bool _showCreateForm;
+    private bool _isSubmitting;
+    private string? _formError;
+    private string _currentFilter = "All";
+    private readonly string[] _filters = ["All", "Todo", "InProgress", "Done", "Cancelled"];
+
+    private TaskFormModel _newTask = new();
+    private Guid? _editingTaskId;
+    private TaskFormModel _editTask = new();
+    private string? _editError;
+    private Guid? _confirmDeleteId;
+    private ToastInfo? _toast;
+
+    private IEnumerable<TaskItemResponse> FilteredTasks =>
+        _currentFilter == "All" ? _tasks : _tasks.Where(t => t.Status == _currentFilter);
+
+    protected override async Task OnInitializedAsync()
+    {
+        Lang.OnLanguageChanged += OnLangChanged;
+        await LoadTasks();
+    }
+
+    private void OnLangChanged() => InvokeAsync(StateHasChanged);
+    public void Dispose() => Lang.OnLanguageChanged -= OnLangChanged;
+
+    private async Task LoadTasks()
+    {
+        _isLoading = true;
+        try { _tasks = await TaskService.GetMyTasksAsync(); }
+        catch { ShowToast(Lang.Get("tasks.load_error"), "danger"); _tasks = []; }
+        _isLoading = false;
+    }
+
+    // ═══════ CREATE ═══════
+    private void ShowCreateForm() { _showCreateForm = true; _editingTaskId = null; _confirmDeleteId = null; }
+
+    private async Task CreateTask()
+    {
+        if (string.IsNullOrWhiteSpace(_newTask.Title)) { _formError = Lang.Get("tasks.title_required"); return; }
+        _isSubmitting = true; _formError = null;
+
+        var request = new CreateTaskRequest(_newTask.Title!, _newTask.Description, _newTask.Priority, _newTask.DueDate);
+        var result = await TaskService.CreateAsync(request);
+
+        if (result.IsSuccess) { _showCreateForm = false; _newTask = new(); ShowToast(Lang.Get("tasks.created"), "success"); await LoadTasks(); }
+        else { _formError = result.ErrorMessage; }
+        _isSubmitting = false;
+    }
+
+    private void CancelCreate() { _showCreateForm = false; _newTask = new(); _formError = null; }
+
+    // ═══════ EDIT ═══════
+    private void StartEdit(TaskItemResponse task)
+    {
+        _editingTaskId = task.Id;
+        _editTask = new() { Title = task.Title, Description = task.Description, Priority = task.Priority, DueDate = task.DueDate };
+        _editError = null; _showCreateForm = false; _confirmDeleteId = null;
+    }
+
+    private async Task SaveEdit()
+    {
+        if (string.IsNullOrWhiteSpace(_editTask.Title)) { _editError = Lang.Get("tasks.title_required"); return; }
+        _isSubmitting = true; _editError = null;
+
+        var request = new UpdateTaskRequest(_editTask.Title!, _editTask.Description, _editTask.Priority, _editTask.DueDate);
+        var result = await TaskService.UpdateAsync(_editingTaskId!.Value, request);
+
+        if (result.IsSuccess) { _editingTaskId = null; _editTask = new(); ShowToast(Lang.Get("tasks.updated"), "success"); await LoadTasks(); }
+        else { _editError = result.ErrorMessage; }
+        _isSubmitting = false;
+    }
+
+    private void CancelEdit() { _editingTaskId = null; _editTask = new(); _editError = null; }
+
+    // ═══════ STATUS ═══════
+    private async Task ChangeStatus(Guid taskId, string newStatus)
+    {
+        var result = await TaskService.ChangeStatusAsync(taskId, newStatus);
+        if (result.IsSuccess) ShowToast($"{Lang.Get("tasks.status_changed")}{GetStatusLabel(newStatus)}", "info");
+        else ShowToast(result.ErrorMessage ?? "Failed.", "danger");
+        await LoadTasks();
+    }
+
+    // ═══════ DELETE ═══════
+    private void RequestDelete(Guid taskId) { _confirmDeleteId = taskId; _editingTaskId = null; }
+
+    private async Task ConfirmDelete(Guid taskId)
+    {
+        _confirmDeleteId = null;
+        var result = await TaskService.DeleteAsync(taskId);
+        if (result.IsSuccess) ShowToast(Lang.Get("tasks.deleted"), "warning");
+        else ShowToast(result.ErrorMessage ?? "Failed.", "danger");
+        await LoadTasks();
+    }
+
+    private void CancelDelete() => _confirmDeleteId = null;
+
+    // ═══════ TOASTS ═══════
+    private void ShowToast(string message, string type) { _toast = new(message, type); _ = AutoDismiss(); }
+    private async Task AutoDismiss() { await Task.Delay(3500); _toast = null; StateHasChanged(); }
+    private void DismissToast() => _toast = null;
+
+    // ═══════ HELPERS ═══════
+    private string GetStatusLabel(string s) => s switch
+    {
+        "Todo" => Lang.Get("filter.todo"),
+        "InProgress" => Lang.Get("filter.inprogress"),
+        "Done" => Lang.Get("filter.done"),
+        "Cancelled" => Lang.Get("filter.cancelled"),
+        _ => s
+    };
+
+    private string GetFilterLabel(string f) => f switch
+    {
+        "All" => Lang.Get("filter.all"),
+        "Todo" => Lang.Get("filter.todo"),
+        "InProgress" => Lang.Get("filter.inprogress"),
+        "Done" => Lang.Get("filter.done"),
+        "Cancelled" => Lang.Get("filter.cancelled"),
+        _ => f
+    };
+
+    private string GetPriorityLabel(string p) => p switch
+    {
+        "Low" => Lang.Get("priority.low"),
+        "Medium" => Lang.Get("priority.medium"),
+        "High" => Lang.Get("priority.high"),
+        "Critical" => Lang.Get("priority.critical"),
+        _ => p
+    };
+
+    private static string GetToastIcon(string t) => t switch
+    { "success" => "bi-check-circle-fill", "danger" => "bi-exclamation-circle-fill",
+      "info" => "bi-info-circle-fill", "warning" => "bi-exclamation-triangle-fill", _ => "bi-info-circle-fill" };
+
+    private class TaskFormModel
+    {
+        public string? Title { get; set; }
+        public string? Description { get; set; }
+        public string Priority { get; set; } = "Medium";
+        public DateTime? DueDate { get; set; }
+    }
+
+    private record ToastInfo(string Message, string Type);
+}

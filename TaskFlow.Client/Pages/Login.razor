@@ -1,0 +1,92 @@
+@page "/login"
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+@inject LanguageService Lang
+@implements IDisposable
+
+<PageTitle>@Lang.Get("login.title") — TaskFlow</PageTitle>
+
+<div class="row justify-content-center" style="min-height: calc(100vh - 180px); align-items: center;">
+    <div class="col-md-5 col-lg-4">
+        <div class="auth-card card">
+            <div class="auth-header">
+                <i class="bi bi-kanban d-block mb-2" style="font-size: 2rem;"></i>
+                <h3>@Lang.Get("login.title")</h3>
+                <p>@Lang.Get("login.subtitle")</p>
+            </div>
+            <div class="auth-body">
+                @if (!string.IsNullOrEmpty(_errorMessage))
+                {
+                    <div class="alert alert-danger py-2" style="font-size: 0.875rem;">
+                        <i class="bi bi-exclamation-circle me-1"></i>@_errorMessage
+                    </div>
+                }
+
+                <EditForm Model="_model" OnValidSubmit="HandleLogin" FormName="login">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary class="text-danger small" />
+
+                    <div class="mb-3">
+                        <label class="form-label">@Lang.Get("login.email")</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light"><i class="bi bi-envelope text-muted"></i></span>
+                            <InputText @bind-Value="_model.Email" class="form-control" placeholder="you@example.com" />
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label">@Lang.Get("login.password")</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light"><i class="bi bi-lock text-muted"></i></span>
+                            <InputText @bind-Value="_model.Password" type="password" class="form-control" placeholder="••••••••" />
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100" disabled="@_isLoading">
+                        @if (_isLoading) { <span class="spinner-border spinner-border-sm me-2"></span> }
+                        <i class="bi bi-box-arrow-in-right me-1"></i> @Lang.Get("login.submit")
+                    </button>
+                </EditForm>
+            </div>
+            <div class="auth-footer">
+                @Lang.Get("login.no_account") <a href="/register" class="fw-semibold">@Lang.Get("login.create_one")</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private LoginFormModel _model = new();
+    private string? _errorMessage;
+    private bool _isLoading;
+
+    protected override void OnInitialized() => Lang.OnLanguageChanged += Refresh;
+    private void Refresh() => InvokeAsync(StateHasChanged);
+    public void Dispose() => Lang.OnLanguageChanged -= Refresh;
+
+    private async Task HandleLogin()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+
+        var request = new LoginRequest(_model.Email!, _model.Password!);
+        var result = await AuthService.LoginAsync(request);
+
+        if (result.IsSuccess)
+            Navigation.NavigateTo("/tasks");
+        else
+            _errorMessage = result.ErrorMessage;
+
+        _isLoading = false;
+    }
+
+    private class LoginFormModel
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Email is required.")]
+        [System.ComponentModel.DataAnnotations.EmailAddress(ErrorMessage = "Invalid email format.")]
+        public string? Email { get; set; }
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Password is required.")]
+        public string? Password { get; set; }
+    }
+}

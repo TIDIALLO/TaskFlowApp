@@ -1,5 +1,4 @@
-﻿using System.Reflection.Emit;
-using TaskFlow.Shared.Kernel.Primitives;
+﻿using TaskFlow.Shared.Kernel.Primitives;
 using TaskFlow.Shared.Kernel.Results;
 using TaskFlow.Users.Domain.Errors;
 using TaskFlow.Users.Domain.ValueObjects;
@@ -23,7 +22,10 @@ public sealed class User : Entity
         CreatedAt = DateTime.UtcNow;
     }
 
-    private User() { } // EF Core
+    // EF Core a besoin d'un constructeur sans paramètre
+#pragma warning disable CS8618
+    private User() { }
+#pragma warning restore CS8618
 
     public static Result<User> Create(Email email, Password password, FullName fullName)
     {

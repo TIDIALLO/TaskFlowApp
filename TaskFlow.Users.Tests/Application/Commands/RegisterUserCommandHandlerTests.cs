@@ -14,6 +14,7 @@ public class RegisterUserCommandHandlerTests
 {
     private readonly Mock<IUserRepository> _userRepositoryMock;
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
+    private readonly Mock<IPasswordHasher> _passwordHasherMock; // NOUVEAU
     private readonly Mock<IMediator> _mediatorMock;
     private readonly Mock<ILogger<RegisterUserCommandHandler>> _loggerMock;
     private readonly RegisterUserCommandHandler _handler;
@@ -22,12 +23,19 @@ public class RegisterUserCommandHandlerTests
     {
         _userRepositoryMock = new Mock<IUserRepository>();
         _unitOfWorkMock = new Mock<IUnitOfWork>();
+        _passwordHasherMock = new Mock<IPasswordHasher>();
         _mediatorMock = new Mock<IMediator>();
         _loggerMock = new Mock<ILogger<RegisterUserCommandHandler>>();
+
+        // Setup par défaut : le hasher retourne un hash prévisible
+        _passwordHasherMock
+            .Setup(x => x.Hash(It.IsAny<string>()))
+            .Returns("$2a$12$hashedpassword");
 
         _handler = new RegisterUserCommandHandler(
             _userRepositoryMock.Object,
             _unitOfWorkMock.Object,
+            _passwordHasherMock.Object, // NOUVEAU paramètre
             _mediatorMock.Object,
             _loggerMock.Object);
     }
@@ -58,6 +66,8 @@ public class RegisterUserCommandHandlerTests
         result.Value.Email.Should().Be(UserFixtures.ValidEmail);
         result.Value.FirstName.Should().Be(UserFixtures.ValidFirstName);
 
+        // Vérifie que le password a bien été hashé
+        _passwordHasherMock.Verify(x => x.Hash(UserFixtures.ValidPassword), Times.Once);
         _userRepositoryMock.Verify(x => x.Add(It.IsAny<User>()), Times.Once);
         _unitOfWorkMock.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
@@ -74,7 +84,7 @@ public class RegisterUserCommandHandlerTests
 
         _userRepositoryMock
             .Setup(x => x.ExistsAsync(It.IsAny<Email>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);  // Email existe déjà !
+            .ReturnsAsync(true);
 
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);
@@ -91,7 +101,7 @@ public class RegisterUserCommandHandlerTests
     {
         // Arrange
         var command = new RegisterUserCommand(
-            UserFixtures.InvalidEmail,  // Email invalide !
+            UserFixtures.InvalidEmail,
             UserFixtures.ValidPassword,
             UserFixtures.ValidFirstName,
             UserFixtures.ValidLastName);

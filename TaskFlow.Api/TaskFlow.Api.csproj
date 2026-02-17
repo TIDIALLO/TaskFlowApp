@@ -8,6 +8,10 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.23" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.23">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
     <PackageReference Include="Serilog.AspNetCore" Version="8.0.3" />
     <PackageReference Include="Serilog.Enrichers.Environment" Version="3.0.1" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
@@ -16,7 +20,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\TaskFlow.Shared.Contracts\TaskFlow.Shared.Contracts.csproj" />
     <ProjectReference Include="..\TaskFlow.Users.Infrastructure\TaskFlow.Users.Infrastructure.csproj" />
+    <ProjectReference Include="..\TaskFlow.Tasks.Infrastructure\TaskFlow.Tasks.Infrastructure.csproj" />
+    <ProjectReference Include="..\TaskFlow.Notifications.Infrastructure\TaskFlow.Notifications.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>

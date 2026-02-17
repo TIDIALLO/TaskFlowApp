@@ -48,5 +48,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
 
         builder.Property(u => u.IsActive).IsRequired();
         builder.Property(u => u.CreatedAt).IsRequired();
+
+        builder.Ignore(u => u.DomainEvents);
     }
 }

@@ -1,0 +1,148 @@
+@page "/notifications"
+@using Microsoft.AspNetCore.Authorization
+@using TaskFlow.Client.Services
+@using TaskFlow.Shared.Contracts.Notifications
+@attribute [Authorize]
+@inject NotificationService NotifService
+@inject LanguageService Lang
+@implements IDisposable
+
+<PageTitle>@Lang.Get("notif.title") — TaskFlow</PageTitle>
+
+@* ══════════ HEADER ══════════ *@
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="fw-bold mb-0">
+        <i class="bi bi-bell text-primary me-2"></i>@Lang.Get("notif.title")
+        @if (!isLoading && notifications.Any(n => !n.IsRead))
+        {
+            <span class="badge rounded-pill bg-primary ms-2" style="font-size: 0.7rem;">
+                @notifications.Count(n => !n.IsRead) @Lang.Get("notif.new")
+            </span>
+        }
+    </h3>
+    @if (notifications.Any(n => !n.IsRead))
+    {
+        <button class="btn btn-outline-primary btn-sm" @onclick="MarkAllRead" disabled="@isLoading">
+            <i class="bi bi-check2-all me-1"></i> @Lang.Get("notif.mark_all")
+        </button>
+    }
+</div>
+
+@* ══════════ CONTENT ══════════ *@
+@if (isLoading)
+{
+    <div class="text-center py-5">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="text-muted mt-2">@Lang.Get("notif.loading")</p>
+    </div>
+}
+else if (!notifications.Any())
+{
+    <div class="empty-state">
+        <i class="bi bi-bell-slash"></i>
+        <h5 class="text-dark">@Lang.Get("notif.empty")</h5>
+        <p>@Lang.Get("notif.empty_hint")</p>
+    </div>
+}
+else
+{
+    <div class="card">
+        <div class="list-group list-group-flush">
+            @foreach (var notif in notifications)
+            {
+                <div class="notif-item d-flex gap-3 align-items-start @(notif.IsRead ? "" : "unread")"
+                     @onclick="() => MarkRead(notif)">
+                    <div class="notif-icon @GetBgClass(notif.Type)">
+                        @GetIcon(notif.Type)
+                    </div>
+                    <div class="flex-grow-1" style="min-width: 0;">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <strong class="@(notif.IsRead ? "text-muted" : "")" style="font-size: 0.9rem;">
+                                @notif.Title
+                            </strong>
+                            <small class="text-muted text-nowrap ms-3">@FormatDate(notif.CreatedAt)</small>
+                        </div>
+                        <p class="mb-0 mt-1 @(notif.IsRead ? "text-muted" : "text-secondary")" style="font-size: 0.85rem; line-height: 1.5;">
+                            @notif.Message
+                        </p>
+                        @if (!notif.IsRead)
+                        {
+                            <span class="badge rounded-pill bg-primary mt-1" style="font-size: 0.6rem;">NEW</span>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger mt-3 small">
+        <i class="bi bi-exclamation-circle me-1"></i>@errorMessage
+    </div>
+}
+
+@code {
+    private List<NotificationResponse> notifications = [];
+    private bool isLoading = true;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Lang.OnLanguageChanged += OnLangChanged;
+        await LoadNotifications();
+    }
+
+    private void OnLangChanged() => InvokeAsync(StateHasChanged);
+    public void Dispose() => Lang.OnLanguageChanged -= OnLangChanged;
+
+    private async Task LoadNotifications()
+    {
+        isLoading = true;
+        notifications = await NotifService.GetAllAsync();
+        isLoading = false;
+    }
+
+    private async Task MarkRead(NotificationResponse notif)
+    {
+        if (notif.IsRead) return;
+        var result = await NotifService.MarkAsReadAsync(notif.Id);
+        if (result.IsSuccess) await LoadNotifications();
+        else errorMessage = result.ErrorMessage;
+    }
+
+    private async Task MarkAllRead()
+    {
+        isLoading = true;
+        var result = await NotifService.MarkAllAsReadAsync();
+        if (result.IsSuccess) await LoadNotifications();
+        else errorMessage = result.ErrorMessage;
+        isLoading = false;
+    }
+
+    private static string GetIcon(string type) => type switch
+    {
+        "Welcome" => "🎉", "TaskCreated" => "📝", "TaskCompleted" => "✅",
+        "TaskStatusChanged" => "🔄", "System" => "⚙️", _ => "🔔"
+    };
+
+    private static string GetBgClass(string type) => type switch
+    {
+        "Welcome" => "bg-warning bg-opacity-10",
+        "TaskCreated" => "bg-primary bg-opacity-10",
+        "TaskCompleted" => "bg-success bg-opacity-10",
+        "TaskStatusChanged" => "bg-info bg-opacity-10",
+        _ => "bg-light"
+    };
+
+    private string FormatDate(DateTime date)
+    {
+        var diff = DateTime.UtcNow - date;
+        if (diff.TotalMinutes < 1) return Lang.Get("notif.just_now");
+        if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes}{Lang.Get("notif.min_ago")}";
+        if (diff.TotalHours < 24) return $"{(int)diff.TotalHours}{Lang.Get("notif.hours_ago")}";
+        if (diff.TotalDays < 7) return $"{(int)diff.TotalDays}{Lang.Get("notif.days_ago")}";
+        return date.ToString("MMM dd, yyyy");
+    }
+}

@@ -1,18 +1,18 @@
-using System.Diagnostics;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Serilog;
-using TaskFlow.Users.Application.Commands.Register;
-using TaskFlow.Users.Application.Interfaces;
-using TaskFlow.Users.Infrastructure.Data;
-using TaskFlow.Users.Infrastructure.Repositories;
-using TaskFlow.Users.Infrastructure.Services;
+using TaskFlow.Api.Middleware;
+using TaskFlow.Tasks.Application;
+using TaskFlow.Tasks.Infrastructure;
+using TaskFlow.Users.Application;
+using TaskFlow.Users.Infrastructure;
+using TaskFlow.Notifications.Application;
+using TaskFlow.Notifications.Infrastructure;
 
 // ═══════════════════════════════════════════════════════════
-// SERILOG CONFIGURATION (avant tout le reste !)
+// SERILOG — Configuré en premier car il doit capturer les erreurs de démarrage
 // ═══════════════════════════════════════════════════════════
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Debug()
@@ -31,36 +31,27 @@ Log.Logger = new LoggerConfiguration()
 
 try
 {
-    Log.Information("🚀 Starting TaskFlow API...");
+    Log.Information("Starting TaskFlow API...");
 
     var builder = WebApplication.CreateBuilder(args);
-
-    // Utiliser Serilog
     builder.Host.UseSerilog();
 
     // ═══════════════════════════════════════════════════════════
-    // CONTROLLERS
+    // SERVICES — Chaque module s'enregistre proprement via ses extension methods
     // ═══════════════════════════════════════════════════════════
+    builder.Services
+        .AddUsersApplication()                                    // MediatR, Validators, Behaviors
+        .AddUsersInfrastructure(builder.Configuration)            // EF Core, Repos, JWT, BCrypt
+        .AddTasksApplication()                                    // MediatR, Validators pour Tasks
+        .AddTasksInfrastructure(builder.Configuration)            // EF Core, Repos pour Tasks
+        .AddNotificationsApplication()                            // MediatR handlers cross-module
+        .AddNotificationsModule(builder.Configuration);           // EF Core, Repos pour Notifications
+
     builder.Services.AddControllers();
 
-    // ═══════════════════════════════════════════════════════════
-    // DATABASE
-    // ═══════════════════════════════════════════════════════════
-    builder.Services.AddDbContext<UsersDbContext>(options =>
-        options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
-
-    // ═══════════════════════════════════════════════════════════
-    // DEPENDENCY INJECTION
-    // ═══════════════════════════════════════════════════════════
-    builder.Services.AddScoped<IUserRepository, UserRepository>();
-    builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
-    builder.Services.AddScoped<IJwtService, JwtService>();
-
-    // ═══════════════════════════════════════════════════════════
-    // MEDIATR
-    // ═══════════════════════════════════════════════════════════
-    builder.Services.AddMediatR(cfg =>
-        cfg.RegisterServicesFromAssembly(typeof(RegisterUserCommand).Assembly));
+    // Global Exception Handler (IExceptionHandler de .NET 8)
+    builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+    builder.Services.AddProblemDetails(); // Active le format ProblemDetails pour les erreurs
 
     // ═══════════════════════════════════════════════════════════
     // JWT AUTHENTICATION
@@ -84,7 +75,21 @@ try
     builder.Services.AddAuthorization();
 
     // ═══════════════════════════════════════════════════════════
-    // SWAGGER + JWT SUPPORT
+    // CORS — Permet au frontend Blazor WASM d'appeler l'API
+    // ═══════════════════════════════════════════════════════════
+    builder.Services.AddCors(options =>
+    {
+        options.AddPolicy("AllowBlazor", policy =>
+        {
+            policy
+                .WithOrigins("http://localhost:5082") // URL du frontend Blazor WASM
+                .AllowAnyHeader()
+                .AllowAnyMethod();
+        });
+    });
+
+    // ═══════════════════════════════════════════════════════════
+    // SWAGGER
     // ═══════════════════════════════════════════════════════════
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen(options =>
@@ -93,10 +98,9 @@ try
         {
             Title = "TaskFlow API",
             Version = "v1",
-            Description = "API de gestion de tâches"
+            Description = "Task management API"
         });
 
-        // Configuration JWT pour Swagger
         options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
         {
             Name = "Authorization",
@@ -104,7 +108,7 @@ try
             Scheme = "Bearer",
             BearerFormat = "JWT",
             In = ParameterLocation.Header,
-            Description = "Entrez votre token JWT. Exemple: eyJhbGciOiJIUzI1NiIs..."
+            Description = "Enter your JWT token"
         });
 
         options.AddSecurityRequirement(new OpenApiSecurityRequirement
@@ -123,17 +127,13 @@ try
         });
     });
 
+    // ═══════════════════════════════════════════════════════════
+    // MIDDLEWARE PIPELINE — L'ordre compte !
+    // ═══════════════════════════════════════════════════════════
     var app = builder.Build();
 
-    // ═══════════════════════════════════════════════════════════
-    // MIDDLEWARE PIPELINE
-    // ═══════════════════════════════════════════════════════════
-
-    // Serilog request logging
-    app.UseSerilogRequestLogging(options =>
-    {
-        options.MessageTemplate = "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms";
-    });
+    app.UseExceptionHandler();      // 1. Attrape les exceptions en premier
+    app.UseSerilogRequestLogging(); // 2. Log chaque requête HTTP
 
     if (app.Environment.IsDevelopment())
     {
@@ -142,16 +142,17 @@ try
     }
 
     app.UseHttpsRedirection();
-    app.UseAuthentication();
-    app.UseAuthorization();
+    app.UseCors("AllowBlazor");     // 3. CORS avant auth
+    app.UseAuthentication();         // 4. Vérifie le token JWT
+    app.UseAuthorization();          // 5. Vérifie les autorisations
     app.MapControllers();
 
-    Log.Information("✅ TaskFlow API started successfully");
+    Log.Information("TaskFlow API started successfully");
     app.Run();
 }
 catch (Exception ex)
 {
-    Log.Fatal(ex, "❌ Application terminated unexpectedly");
+    Log.Fatal(ex, "Application terminated unexpectedly");
 }
 finally
 {
